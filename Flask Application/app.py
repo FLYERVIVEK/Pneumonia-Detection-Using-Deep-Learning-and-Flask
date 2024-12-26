@@ -4,20 +4,17 @@ from PIL import Image
 import cv2
 from flask import Flask, request, render_template
 from werkzeug.utils import secure_filename
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Flatten, Dense, Dropout
-from tensorflow.keras.applications.vgg19 import VGG19
+import warnings
+from PIL import Image, ImageEnhance
+warnings.filterwarnings('ignore')
+import tensorflow as tf
+from keras.models import load_model
+from keras.applications.vgg16 import preprocess_input
+import numpy as np
+from keras.preprocessing import image
 
 
-base_model = VGG19(include_top=False, input_shape=(128,128,3))
-x = base_model.output
-flat=Flatten()(x)
-class_1 = Dense(4608, activation='relu')(flat)
-drop_out = Dropout(0.2)(class_1)
-class_2 = Dense(1152, activation='relu')(drop_out)
-output = Dense(2, activation='softmax')(class_2)
-model_03 = Model(base_model.inputs, output)
-model_03.load_weights('vgg_unfrozen.h5')
+
 app = Flask(__name__)
 
 print('Model loaded. Check http://127.0.0.1:5000/')
@@ -31,14 +28,18 @@ def get_className(classNo):
 
 
 def getResult(img):
-    image=cv2.imread(img)
-    image = Image.fromarray(image, 'RGB')
-    image = image.resize((128, 128))
-    image=np.array(image)
-    input_img = np.expand_dims(image, axis=0)
-    result=model_03.predict(input_img)
-    result01=np.argmax(result,axis=1)
-    return result01
+    model=load_model('chest_xray.h5') 
+    img_file=image.load_img(img,target_size=(224,224))
+    x=image.img_to_array(img_file)
+    x=np.expand_dims(x, axis=0)
+    img_data=preprocess_input(x)
+    classes=model.predict(img_data)
+    global result
+    result=classes
+    if result[0][0]>0.5:
+            return "Normal"
+    else:
+            return "Pneumonia"
 
 
 @app.route('/', methods=['GET'])
@@ -57,7 +58,7 @@ def upload():
         f.save(file_path)
         value=getResult(file_path)
         result=get_className(value) 
-        return result
+        return value
     return None
 
 
